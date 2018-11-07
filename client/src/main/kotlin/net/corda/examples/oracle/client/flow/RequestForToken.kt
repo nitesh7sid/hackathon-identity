@@ -10,10 +10,8 @@ import net.corda.core.identity.CordaX500Name
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.ProgressTracker
-import net.corda.examples.oracle.base.contract.PRIME_PROGRAM_ID
-import net.corda.examples.oracle.base.contract.PrimeContract
-import net.corda.examples.oracle.base.contract.PrimeState
-import net.corda.examples.oracle.base.flow.QueryPrime
+import net.corda.examples.oracle.base.contract.*
+import net.corda.examples.oracle.base.flow.QueryIdentity
 import net.corda.examples.oracle.base.flow.SignPrime
 import java.util.function.Predicate
 
@@ -24,7 +22,7 @@ import java.util.function.Predicate
 // - Finalises the transaction
 @InitiatingFlow
 @StartableByRPC
-class CreatePrime(val index: Int) : FlowLogic<SignedTransaction>() {
+class RequestForToken(val token: RequestToken) : FlowLogic<SignedTransaction>() {
 
     companion object {
         object SET_UP : ProgressTracker.Step("Initialising flow.")
@@ -53,16 +51,15 @@ class CreatePrime(val index: Int) : FlowLogic<SignedTransaction>() {
                  ?: throw IllegalArgumentException("Requested oracle $oracleName not found on network.")
 
         progressTracker.currentStep = QUERYING_THE_ORACLE
-        val nthPrimeRequestedFromOracle = subFlow(QueryPrime(oracle, index))
+        val nthPrimeRequestedFromOracle = subFlow(QueryIdentity(oracle, token))
 
         progressTracker.currentStep = BUILDING_THE_TX
-        val primeState = PrimeState(index, nthPrimeRequestedFromOracle, ourIdentity)
-        val primeCmdData = PrimeContract.Create(index, nthPrimeRequestedFromOracle)
+        val tokenCmdData = TokenContract.Commands.Issue(token)
         // By listing the oracle here, we make the oracle a required signer.
-        val primeCmdRequiredSigners = listOf(oracle.owningKey, ourIdentity.owningKey)
+        val tokenCmdRequiredSigners = listOf(oracle.owningKey, ourIdentity.owningKey)
         val builder = TransactionBuilder(notary)
-                .addOutputState(primeState, PRIME_PROGRAM_ID)
-                .addCommand(primeCmdData, primeCmdRequiredSigners)
+                .addOutputState(token, TOKEN_CONTRACT_ID)
+                .addCommand(tokenCmdData, tokenCmdRequiredSigners)
 
         progressTracker.currentStep = VERIFYING_THE_TX
         builder.verify(serviceHub)
@@ -75,7 +72,7 @@ class CreatePrime(val index: Int) : FlowLogic<SignedTransaction>() {
         // that require its signature.
         val ftx = ptx.buildFilteredTransaction(Predicate {
             when (it) {
-                is Command<*> -> oracle.owningKey in it.signers && it.value is PrimeContract.Create
+                is Command<*> -> oracle.owningKey in it.signers && it.value is TokenContract.Commands.Issue
                 else -> false
             }
         })
