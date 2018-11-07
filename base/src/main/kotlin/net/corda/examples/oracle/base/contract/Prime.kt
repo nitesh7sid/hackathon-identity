@@ -2,6 +2,7 @@ package net.corda.examples.oracle.base.contract
 
 import net.corda.core.contracts.*
 import net.corda.core.identity.AbstractParty
+import net.corda.core.identity.Party
 import net.corda.core.transactions.LedgerTransaction
 
 const val PRIME_PROGRAM_ID: ContractClassName = "net.corda.examples.oracle.base.contract.PrimeContract"
@@ -21,11 +22,18 @@ class PrimeContract : Contract {
     }
 }
 
-// If 'n' is a natural number N then 'nthPrime' is the Nth prime.
-// `Requester` is the Party that will store this fact in its vault.
-data class PrimeState(val n: Int,
-                      val nthPrime: Int,
-                      val requester: AbstractParty) : ContractState {
-    override val participants: List<AbstractParty> get() = listOf(requester)
-    override fun toString() = "The ${n}th prime number is $nthPrime."
-}
+// Type of identity. For poc its just PASSPORT that will be submitted by the requester
+
+enum class IdentityType{ PASSPORT }
+
+// Identity document
+data class DID(val id: String,
+               val type: IdentityType
+               )
+
+data class RequestToken(val identity: DID,
+                        val token: String,
+                        val issuer: Party,
+                        val requester: Party,
+                        override val linearId: UniqueIdentifier = UniqueIdentifier(),
+                        override val participants: List<AbstractParty> = listOf(issuer, requester)): LinearState
